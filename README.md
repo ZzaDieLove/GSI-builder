@@ -60,7 +60,7 @@ The script can automatically install most dependencies:
 
 1. **Download the script**:
 ```bash
-wget https://raw.githubusercontent.com/yourusername/gsi-converter-tools/main/gsi_converter_tools.py
+wget https://raw.githubusercontent.com/DeyBisingla/GSI-builder/main/gsi_converter_tools.py
 chmod +x gsi_converter_tools.py
 ```
 
