@@ -150,20 +150,81 @@ class GSITools:
     def install_debian_deps(self):
         """Install dependencies for Debian/Ubuntu"""
         packages = [
-            'adb', 'fastboot', 'openjdk-17-jdk', 'git', 'p7zip-full', 'p7zip-rar',
-            'brotli', 'lz4', 'liblzma-dev', 'python3-pip', 'curl', 'wget',
-            'build-essential', 'libncurses5-dev', 'libssl-dev', 'unzip', 'zip'
+            'android-tools-adb', 'android-tools-fastboot', 'openjdk-17-jdk', 
+            'git', 'p7zip-full', 'p7zip-rar', 'brotli', 'lz4', 'liblzma-dev', 
+            'python3-pip', 'python3-venv', 'curl', 'wget', 'build-essential', 
+            'libncurses5-dev', 'libssl-dev', 'unzip', 'zip', 'cmake', 
+            'pkg-config', 'e2fsprogs', 'libe2fs-dev'
         ]
 
         self.run_command(['sudo', 'apt-get', 'update'])
         self.run_command(['sudo', 'apt-get', 'install', '-y'] + packages)
 
-        # Install simg2img tools
-        self.run_command(['sudo', 'apt-get', 'install', '-y', 'android-tools-fsutils'])
+        # Install simg2img tools (build from source if package not available)
+        self.install_simg2img_tools()
+
+    def install_simg2img_tools(self):
+        """Install simg2img tools - build from source if needed"""
+        self.print_warning("Installing simg2img tools...")
+        
+        # Check if already installed
+        result = self.run_command(['which', 'simg2img'], check=False)
+        if result[0] == 0:
+            self.print_success("simg2img already installed")
+            return
+        
+        # Try to install from package first (older Ubuntu versions)
+        result = self.run_command(['sudo', 'apt-get', 'install', '-y', 'simg2img'], check=False)
+        if result[0] == 0:
+            self.print_success("simg2img installed from package")
+            return
+        
+        # Build from source
+        self.print_warning("Building simg2img from source...")
+        
+        local_bin = Path.home() / ".local" / "bin"
+        local_bin.mkdir(parents=True, exist_ok=True)
+        
+        # Download prebuilt binary
+        import urllib.request
+        import platform
+        
+        machine = platform.machine().lower()
+        
+        if machine in ["x86_64", "amd64"]:
+            urls = [
+                "https://github.com/ponces/android-tools/releases/download/34.0.0/simg2img",
+                "https://raw.githubusercontent.com/ponces/android-tools-binaries/main/simg2img-x86_64"
+            ]
+        else:
+            urls = [
+                "https://raw.githubusercontent.com/ponces/android-tools-binaries/main/simg2img-arm64"
+            ]
+        
+        for url in urls:
+            try:
+                output_file = local_bin / "simg2img"
+                urllib.request.urlretrieve(url, str(output_file))
+                output_file.chmod(0o755)
+                
+                # Also download img2simg
+                img2simg_url = url.replace("simg2img", "img2simg")
+                img2simg_file = local_bin / "img2simg"
+                urllib.request.urlretrieve(img2simg_url, str(img2simg_file))
+                img2simg_file.chmod(0o755)
+                
+                self.print_success("simg2img tools downloaded")
+                return
+            except Exception as e:
+                self.print_warning(f"Failed to download from {url}: {e}")
+                continue
+        
+        self.print_error("Could not install simg2img. Some features may not work.")
+        self.print_info("You can manually install from: https://github.com/ponces/android-tools/releases")
 
     def install_arch_deps(self):
         """Install dependencies for Arch Linux"""
-        packages = ['android-tools', 'jdk17-openjdk', 'git', 'p7zip', 'brotli', 'lz4', 'python-pip']
+        packages = ['android-tools', 'jdk17-openjdk', 'git', 'p7zip', 'brotli', 'lz4', 'python-pip', 'cmake', 'base-devel']
         self.run_command(['sudo', 'pacman', '-S', '--noconfirm'] + packages)
 
     def install_fedora_deps(self):
