@@ -1,0 +1,107 @@
+# GSI Converter Tools - Git Ignore File
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Firmware and output files (user-generated)
+firmware/
+output/
+*.img
+*.zip
+*.tar
+*.tar.md5
+*.ozip
+*.lz4
+*.br
+*.dat
+*.dat.br
+payload.bin
+super.img
+
+# Mounted directories
+mount/
+sys/
+system/
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+
+# Downloaded tools (managed by install script)
+tools/payload-dumper-go
+tools/sdat2img/
+tools/img2sdat/
+tools/oppo_ozip_decrypt/
+
+# User data
+*.json
+*.config
+*.ini
+
+# OS files
+Thumbs.db
+.DS_Store
+.directory
+
+# Backup files
+*.backup
+*.old
+*.orig
+
+# Large files
+*.iso
+*.bin
+*.raw
+*.sparse
+
+# Test files
+test/
+tests/
+*.test
+
+# Documentation builds
+docs/_build/
+site/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
