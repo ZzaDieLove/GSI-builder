@@ -56,44 +56,76 @@ The script can automatically install most dependencies:
 
 ## Installation
 
-### Quick Start
+### Method 1: Using Pre-built Release (Recommended)
 
-1. **Download the script**:
+Download the latest release from GitHub Releases or Gofile mirror:
+
 ```bash
-wget https://raw.githubusercontent.com/DeyBisingla/GSI-builder/main/gsi_converter_tools.py
-chmod +x gsi_converter_tools.py
+# Download latest release (Linux x64)
+wget https://github.com/yourusername/gsi-converter-tools/releases/latest/download/gsi-converter-tools-linux-x64.tar.gz
+
+# Extract
+tar -xzf gsi-converter-tools-linux-x64.tar.gz
+cd gsi-converter-tools-*/
+
+# Run installer
+chmod +x install.sh
+./install.sh
 ```
 
-2. **Run the script**:
+### Method 2: Automatic Installation Script
+
 ```bash
-python3 gsi_converter_tools.py
+# Download and run installer
+curl -sL https://raw.githubusercontent.com/yourusername/gsi-converter-tools/main/install.sh | bash
+
+# Or clone and install
+git clone https://github.com/yourusername/gsi-converter-tools.git
+cd gsi-converter-tools
+chmod +x install.sh
+./install.sh
 ```
 
-3. **Install dependencies** (Option 1 in menu):
-```bash
-python3 gsi_converter_tools.py --install-deps
-```
+### Method 3: Manual Installation
 
-### Manual Installation
-
-#### Ubuntu/Debian
+#### Ubuntu/Debian (22.04+)
 ```bash
 sudo apt-get update
-sudo apt-get install -y adb fastboot openjdk-17-jdk git p7zip-full p7zip-rar     brotli lz4 liblzma-dev python3-pip curl wget build-essential     libncurses5-dev libssl-dev unzip zip android-tools-fsutils
+sudo apt-get install -y \
+    android-tools-adb android-tools-fastboot openjdk-17-jdk git \
+    p7zip-full p7zip-rar brotli lz4 liblzma-dev python3-pip python3-venv \
+    curl wget build-essential libncurses5-dev libssl-dev unzip zip \
+    cmake pkg-config e2fsprogs libe2fs-dev
 
-pip3 install protobuf pycryptodome twrpdtgen extract-dtb
+pip3 install --user protobuf pycryptodome twrpdtgen extract-dtb requests tqdm colorama
 ```
+
+**Note:** The package `android-tools-fsutils` is deprecated in Ubuntu 22.04+. The installer script will automatically build `simg2img` from source or download prebuilt binaries.
 
 #### Arch Linux
 ```bash
-sudo pacman -S --noconfirm android-tools jdk17-openjdk git p7zip brotli lz4 python-pip
-pip3 install protobuf pycryptodome twrpdtgen extract-dtb
+sudo pacman -S --noconfirm \
+    android-tools jdk17-openjdk git p7zip brotli lz4 python-pip \
+    cmake base-devel
+
+pip3 install --user protobuf pycryptodome twrpdtgen extract-dtb requests tqdm colorama
+```
+
+#### Fedora
+```bash
+sudo dnf install -y \
+    android-tools java-17-openjdk git p7zip brotli lz4 python3-pip \
+    cmake gcc gcc-c++ make
+
+pip3 install --user protobuf pycryptodome twrpdtgen extract-dtb requests tqdm colorama
 ```
 
 #### macOS (with Homebrew)
 ```bash
-brew install android-platform-tools openjdk@17 git p7zip brotli lz4 python@3.11
-pip3 install protobuf pycryptodome twrpdtgen extract-dtb
+brew install \
+    android-platform-tools openjdk@17 git p7zip brotli lz4 python@3.11 cmake
+
+pip3 install --user protobuf pycryptodome twrpdtgen extract-dtb requests tqdm colorama
 ```
 
 ## Usage
@@ -186,6 +218,32 @@ The tool automatically detects and recommends the correct GSI type:
 | ARM | 32-bit | A-Only | `arm_a` |
 | x86_64 | 64-bit | A/B | `x86_64_ab` |
 | x86 | 32-bit | A/B | `x86_ab` |
+
+## GitHub Actions Workflow
+
+This project includes automated GitHub Actions workflows for building and releasing:
+
+### Automatic Builds
+- **Linux (x64)**: Built on Ubuntu with all dependencies
+- **Windows (x64)**: Built on Windows Server
+- **macOS (x64)**: Built on macOS runner
+
+### Releases
+- **GitHub Releases**: Automatic release creation on tag push
+- **Gofile Mirror**: Uploads to Gofile for additional download options (no API key required)
+
+### Triggering a Release
+```bash
+# Create a new tag
+git tag -a v1.0.0 -m "Release version 1.0.0"
+git push origin v1.0.0
+```
+
+The workflow will automatically:
+1. Build packages for all platforms
+2. Create a GitHub Release with assets
+3. Upload to Gofile for mirror downloads
+4. Generate release notes with download links
 
 ## Workflow
 

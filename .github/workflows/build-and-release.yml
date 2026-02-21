@@ -1,0 +1,378 @@
+name: Build and Release GSI Converter Tools
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          android-tools-adb \
+          android-tools-fastboot \
+          p7zip-full \
+          brotli \
+          lz4 \
+          e2fsprogs
+
+    - name: Build simg2img tools
+      run: |
+        mkdir -p build/tools
+        
+        # Download prebuilt simg2img
+        curl -sL "https://github.com/ponces/android-tools/releases/download/34.0.0/simg2img" -o build/tools/simg2img || \
+        curl -sL "https://raw.githubusercontent.com/ponces/android-tools-binaries/main/simg2img-x86_64" -o build/tools/simg2img
+        
+        curl -sL "https://github.com/ponces/android-tools/releases/download/34.0.0/img2simg" -o build/tools/img2simg || \
+        curl -sL "https://raw.githubusercontent.com/ponces/android-tools-binaries/main/img2simg-x86_64" -o build/tools/img2simg
+        
+        curl -sL "https://github.com/ponces/android-tools/releases/download/34.0.0/lpunpack" -o build/tools/lpunpack || \
+        curl -sL "https://raw.githubusercontent.com/ponces/android-tools-binaries/main/lpunpack-x86_64" -o build/tools/lpunpack
+        
+        chmod +x build/tools/*
+
+    - name: Download additional tools
+      run: |
+        mkdir -p build/tools
+        
+        # Download payload-dumper-go
+        curl -sL "https://github.com/ssut/payload-dumper-go/releases/download/1.2.2/payload-dumper-go_1.2.2_linux_amd64.tar.gz" -o /tmp/payload-dumper-go.tar.gz
+        tar -xzf /tmp/payload-dumper-go.tar.gz -C build/tools/
+        rm /tmp/payload-dumper-go.tar.gz
+        chmod +x build/tools/payload-dumper-go
+        
+        # Clone repos
+        git clone --depth 1 https://github.com/xpirt/sdat2img.git build/tools/sdat2img
+        git clone --depth 1 https://github.com/xpirt/img2sdat.git build/tools/img2sdat
+        git clone --depth 1 https://github.com/bkerler/oppo_ozip_decrypt.git build/tools/oppo_ozip_decrypt
+
+    - name: Create release package
+      run: |
+        VERSION=${GITHUB_REF_NAME:-"dev"}
+        PACKAGE_NAME="gsi-converter-tools-${VERSION}-linux-x64"
+        
+        mkdir -p "${PACKAGE_NAME}"
+        
+        # Copy main script
+        cp gsi_converter_tools.py "${PACKAGE_NAME}/"
+        
+        # Copy helper scripts
+        cp install.sh flash_helper.sh "${PACKAGE_NAME}/" 2>/dev/null || true
+        
+        # Copy documentation
+        cp *.md "${PACKAGE_NAME}/" 2>/dev/null || true
+        cp LICENSE "${PACKAGE_NAME}/" 2>/dev/null || true
+        cp SUMMARY.txt "${PACKAGE_NAME}/" 2>/dev/null || true
+        
+        # Copy tools
+        cp -r build/tools "${PACKAGE_NAME}/"
+        
+        # Make scripts executable
+        chmod +x "${PACKAGE_NAME}/"*.sh
+        chmod +x "${PACKAGE_NAME}/"*.py
+        chmod +x "${PACKAGE_NAME}/tools/"* 2>/dev/null || true
+        
+        # Create tarball
+        tar -czf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+        
+        # Create zip
+        zip -r "${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
+        
+        echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_ENV
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGE_NAME }}
+        path: |
+          ${{ env.PACKAGE_NAME }}.tar.gz
+          ${{ env.PACKAGE_NAME }}.zip
+
+    - name: Upload to Gofile
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "Uploading to Gofile..."
+        
+        # Upload tar.gz
+        RESPONSE=$(curl -s -F "file=@${PACKAGE_NAME}.tar.gz" "https://store.gofile.io/uploadFile")
+        echo "Upload response: $RESPONSE"
+        
+        # Extract download link
+        DOWNLOAD_LINK=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data', {}).get('downloadPage', 'N/A'))")
+        DIRECT_LINK=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data', {}).get('directLink', 'N/A'))")
+        
+        echo "Download Page: $DOWNLOAD_LINK"
+        echo "Direct Link: $DIRECT_LINK"
+        
+        # Save links
+        echo "GOFILE_TAR_URL=$DOWNLOAD_LINK" >> $GITHUB_ENV
+        echo "GOFILE_TAR_DIRECT=$DIRECT_LINK" >> $GITHUB_ENV
+        
+        # Upload zip
+        RESPONSE_ZIP=$(curl -s -F "file=@${PACKAGE_NAME}.zip" "https://store.gofile.io/uploadFile")
+        DOWNLOAD_LINK_ZIP=$(echo "$RESPONSE_ZIP" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data', {}).get('downloadPage', 'N/A'))")
+        
+        echo "GOFILE_ZIP_URL=$DOWNLOAD_LINK_ZIP" >> $GITHUB_ENV
+
+    - name: Create Release
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ${{ env.PACKAGE_NAME }}.tar.gz
+          ${{ env.PACKAGE_NAME }}.zip
+        body: |
+          ## GSI Converter Tools ${{ github.ref_name }}
+          
+          ### Downloads
+          
+          #### GitHub Releases
+          - 📦 [${{ env.PACKAGE_NAME }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.PACKAGE_NAME }}.tar.gz)
+          - 📦 [${{ env.PACKAGE_NAME }}.zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.PACKAGE_NAME }}.zip)
+          
+          #### Mirror (Gofile)
+          - 🌐 [Download from Gofile](${{ env.GOFILE_TAR_URL }})
+          
+          ### Installation
+          ```bash
+          # Download and extract
+          tar -xzf ${{ env.PACKAGE_NAME }}.tar.gz
+          cd ${{ env.PACKAGE_NAME }}
+          
+          # Run installer
+          chmod +x install.sh
+          ./install.sh
+          
+          # Or run directly
+          python3 gsi_converter_tools.py
+          ```
+          
+          ### Quick Start
+          ```bash
+          # Interactive mode
+          python3 gsi_converter_tools.py
+          
+          # Extract firmware
+          python3 gsi_converter_tools.py --firmware /path/to/firmware.zip
+          
+          # Build GSI
+          python3 gsi_converter_tools.py --build-only /path/to/system.img
+          
+          # Flash GSI
+          python3 gsi_converter_tools.py --flash-only /path/to/gsi.img
+          ```
+        draft: false
+        prerelease: false
+
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install protobuf pycryptodome requests tqdm colorama
+
+    - name: Download tools
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path "build/tools"
+        
+        # Download payload-dumper-go
+        Invoke-WebRequest -Uri "https://github.com/ssut/payload-dumper-go/releases/download/1.2.2/payload-dumper-go_1.2.2_windows_amd64.tar.gz" -OutFile "/tmp/payload-dumper-go.tar.gz"
+        tar -xzf "/tmp/payload-dumper-go.tar.gz" -C "build/tools/"
+        
+        # Clone repos
+        git clone --depth 1 https://github.com/xpirt/sdat2img.git build/tools/sdat2img
+        git clone --depth 1 https://github.com/xpirt/img2sdat.git build/tools/img2sdat
+        git clone --depth 1 https://github.com/bkerler/oppo_ozip_decrypt.git build/tools/oppo_ozip_decrypt
+
+    - name: Create release package
+      shell: pwsh
+      run: |
+        $VERSION = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "dev" }
+        $PACKAGE_NAME = "gsi-converter-tools-$VERSION-windows-x64"
+        
+        New-Item -ItemType Directory -Force -Path "$PACKAGE_NAME"
+        
+        # Copy files
+        Copy-Item "gsi_converter_tools.py" -Destination "$PACKAGE_NAME/"
+        Copy-Item "*.md" -Destination "$PACKAGE_NAME/" -ErrorAction SilentlyContinue
+        Copy-Item "LICENSE" -Destination "$PACKAGE_NAME/" -ErrorAction SilentlyContinue
+        Copy-Item "SUMMARY.txt" -Destination "$PACKAGE_NAME/" -ErrorAction SilentlyContinue
+        Copy-Item -Recurse "build/tools" -Destination "$PACKAGE_NAME/"
+        
+        # Create zip
+        Compress-Archive -Path "$PACKAGE_NAME" -DestinationPath "$PACKAGE_NAME.zip"
+        
+        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $env:GITHUB_ENV
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGE_NAME }}-windows
+        path: ${{ env.PACKAGE_NAME }}.zip
+
+    - name: Upload to Gofile
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      shell: pwsh
+      run: |
+        echo "Uploading to Gofile..."
+        
+        # Upload using PowerShell
+        $filePath = "${{ env.PACKAGE_NAME }}.zip"
+        $response = Invoke-RestMethod -Uri "https://store.gofile.io/uploadFile" -Method Post -Form @{file=Get-Item $filePath}
+        
+        $downloadLink = $response.data.downloadPage
+        echo "Download Page: $downloadLink"
+        
+        echo "GOFILE_WIN_URL=$downloadLink" >> $env:GITHUB_ENV
+
+    - name: Add Windows build to release
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ${{ env.PACKAGE_NAME }}.zip
+        body: |
+          ### Windows Build
+          - 📦 [${{ env.PACKAGE_NAME }}.zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.PACKAGE_NAME }}.zip)
+          - 🌐 [Gofile Mirror](${{ env.GOFILE_WIN_URL }})
+          
+          **Note:** Windows build requires WSL or manual tool installation.
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        brew install p7zip brotli lz4 e2fsprogs
+        pip3 install protobuf pycryptodome requests tqdm colorama
+
+    - name: Download tools
+      run: |
+        mkdir -p build/tools
+        
+        # Download payload-dumper-go for macOS
+        curl -sL "https://github.com/ssut/payload-dumper-go/releases/download/1.2.2/payload-dumper-go_1.2.2_darwin_amd64.tar.gz" -o /tmp/payload-dumper-go.tar.gz
+        tar -xzf /tmp/payload-dumper-go.tar.gz -C build/tools/
+        rm /tmp/payload-dumper-go.tar.gz
+        chmod +x build/tools/payload-dumper-go
+        
+        # Clone repos
+        git clone --depth 1 https://github.com/xpirt/sdat2img.git build/tools/sdat2img
+        git clone --depth 1 https://github.com/xpirt/img2sdat.git build/tools/img2sdat
+        git clone --depth 1 https://github.com/bkerler/oppo_ozip_decrypt.git build/tools/oppo_ozip_decrypt
+
+    - name: Create release package
+      run: |
+        VERSION=${GITHUB_REF_NAME:-"dev"}
+        PACKAGE_NAME="gsi-converter-tools-${VERSION}-macos-x64"
+        
+        mkdir -p "${PACKAGE_NAME}"
+        cp gsi_converter_tools.py "${PACKAGE_NAME}/"
+        cp *.md "${PACKAGE_NAME}/" 2>/dev/null || true
+        cp LICENSE "${PACKAGE_NAME}/" 2>/dev/null || true
+        cp SUMMARY.txt "${PACKAGE_NAME}/" 2>/dev/null || true
+        cp -r build/tools "${PACKAGE_NAME}/"
+        
+        chmod +x "${PACKAGE_NAME}/"*.py
+        chmod +x "${PACKAGE_NAME}/tools/"* 2>/dev/null || true
+        
+        tar -czf "${PACKAGE_NAME}.tar.gz" "${PACKAGE_NAME}"
+        zip -r "${PACKAGE_NAME}.zip" "${PACKAGE_NAME}"
+        
+        echo "PACKAGE_NAME=${PACKAGE_NAME}" >> $GITHUB_ENV
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ env.PACKAGE_NAME }}-macos
+        path: |
+          ${{ env.PACKAGE_NAME }}.tar.gz
+          ${{ env.PACKAGE_NAME }}.zip
+
+    - name: Upload to Gofile
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      run: |
+        echo "Uploading to Gofile..."
+        
+        RESPONSE=$(curl -s -F "file=@${PACKAGE_NAME}.tar.gz" "https://store.gofile.io/uploadFile")
+        DOWNLOAD_LINK=$(echo "$RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('data', {}).get('downloadPage', 'N/A'))")
+        
+        echo "GOFILE_MAC_URL=$DOWNLOAD_LINK" >> $GITHUB_ENV
+
+    - name: Add macOS build to release
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ${{ env.PACKAGE_NAME }}.tar.gz
+          ${{ env.PACKAGE_NAME }}.zip
+        body: |
+          ### macOS Build
+          - 📦 [${{ env.PACKAGE_NAME }}.tar.gz](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.PACKAGE_NAME }}.tar.gz)
+          - 📦 [${{ env.PACKAGE_NAME }}.zip](https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/${{ env.PACKAGE_NAME }}.zip)
+          - 🌐 [Gofile Mirror](${{ env.GOFILE_MAC_URL }})
+
+  create-release-summary:
+    needs: [build-linux, build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+    - name: Create release summary
+      run: |
+        echo "## 🎉 GSI Converter Tools ${{ github.ref_name }} Released!" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📥 Downloads" >> $GITHUB_STEP_SUMMARY
+        echo "- Linux: See release assets" >> $GITHUB_STEP_SUMMARY
+        echo "- Windows: See release assets" >> $GITHUB_STEP_SUMMARY
+        echo "- macOS: See release assets" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🚀 Quick Start" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo '# Download and extract' >> $GITHUB_STEP_SUMMARY
+        echo 'tar -xzf gsi-converter-tools-*.tar.gz' >> $GITHUB_STEP_SUMMARY
+        echo 'cd gsi-converter-tools-*' >> $GITHUB_STEP_SUMMARY
+        echo '' >> $GITHUB_STEP_SUMMARY
+        echo '# Run' >> $GITHUB_STEP_SUMMARY
+        echo 'python3 gsi_converter_tools.py' >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
