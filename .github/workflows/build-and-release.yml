@@ -61,6 +61,16 @@ jobs:
         fsck.erofs --help | head -20
         dump.erofs --help | head -20
         mkfs.erofs --help | head -20
+
+    - name: Add EROFS tools to package
+      run: |
+        mkdir -p build/tools
+        cp /usr/local/bin/fsck.erofs build/tools/fsck.erofs
+        cp /usr/local/bin/dump.erofs build/tools/dump.erofs
+        cp /usr/local/bin/mkfs.erofs build/tools/mkfs.erofs
+        chmod +x build/tools/fsck.erofs
+        chmod +x build/tools/dump.erofs
+        chmod +x build/tools/mkfs.erofs
         
     - name: Build simg2img tools
       run: |
