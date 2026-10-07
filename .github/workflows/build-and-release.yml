@@ -44,7 +44,7 @@ jobs:
           pkg-config \
           uuid-dev \
           zlib1g-dev
-          
+
     - name: Build EROFS tools
       run: |
         git clone --depth 1 https://github.com/erofs/erofs-utils.git build/erofs-utils
@@ -61,7 +61,7 @@ jobs:
         fsck.erofs --help | head -20
         dump.erofs --help | head -20
         mkfs.erofs --help | head -20
-
+        
     - name: Build simg2img tools
       run: |
         mkdir -p build/tools
