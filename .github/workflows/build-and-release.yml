@@ -34,7 +34,33 @@ jobs:
           p7zip-full \
           brotli \
           lz4 \
-          e2fsprogs
+          e2fsprogs \
+          autoconf \
+          automake \
+          libtool \
+          liblz4-dev \
+          liblzma-dev \
+          libzstd-dev \
+          pkg-config \
+          uuid-dev \
+          zlib1g-dev
+          
+    - name: Build EROFS tools
+      run: |
+        git clone --depth 1 https://github.com/erofs/erofs-utils.git build/erofs-utils
+        cd build/erofs-utils
+        ./autogen.sh
+        ./configure
+        make -j"$(nproc)"
+
+        sudo install -m 0755 fsck/fsck.erofs /usr/local/bin/fsck.erofs
+        sudo install -m 0755 dump/dump.erofs /usr/local/bin/dump.erofs
+        sudo install -m 0755 mkfs/mkfs.erofs /usr/local/bin/mkfs.erofs
+
+        echo "===== EROFS TOOLS ====="
+        fsck.erofs --help | head -20
+        dump.erofs --help | head -20
+        mkfs.erofs --help | head -20
 
     - name: Build simg2img tools
       run: |
