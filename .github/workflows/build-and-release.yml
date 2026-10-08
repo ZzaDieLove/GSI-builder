@@ -110,7 +110,7 @@ jobs:
     - name: Create release package
       run: |
         VERSION=${GITHUB_REF_NAME:-"dev"}
-        PACKAGE_NAME="gsi-converter-tools-${VERSION}-linux-x64"
+        PACKAGE_NAME="gsi-converter-tools-${VERSION}-linux-${{ matrix.arch }}"
         
         mkdir -p "${PACKAGE_NAME}"
         
