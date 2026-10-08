@@ -11,10 +11,14 @@ on:
 
 jobs:
   build-linux:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        arch: [x64, arm64]
+        include:
+          - arch: x64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
     
     steps:
     - name: Checkout code
